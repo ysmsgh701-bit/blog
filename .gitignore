@@ -1,0 +1,15 @@
+# Privacy
+.env
+token.json
+client_secrets.json
+config/credentials.json
+__pycache__/
+*.pyc
+
+# Virtual Environment
+venv/
+.venv/
+
+# Data (Sensitive content can be excluded if needed, 
+# but for GitHub Pages dashboard to work, JSON/HTML should be tracked)
+# data/images/ # 이미지 파일이 많을 경우 제외 추천
