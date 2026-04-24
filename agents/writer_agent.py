@@ -15,7 +15,8 @@ class WriterAgent:
         """사용 가능한 모든 텍스트 생성 모델 리스트 확보"""
         try:
             return [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        except:
+        except Exception as e:
+            print(f"⚠️ 모델 목록 조회 실패: {e}", flush=True)
             return ["models/gemini-pro"]
 
     def generate_post(self, topic, keywords=[]):
@@ -54,9 +55,8 @@ class WriterAgent:
                     else:
                         print(f"⚠️ {model_name} 실패: {e}", flush=True)
                         break # 다음 모델로 넘어감
-                
-        return None
-                
+
+        print("❌ 모든 모델에서 원고 생성 실패", flush=True)
         return None
 
 if __name__ == "__main__":

@@ -5,6 +5,6 @@ google-auth-httplib2
 google-auth-oauthlib
 requests
 schedule
-beautifulsoup4
-python-dotenv
 pyyaml
+flask
+openai

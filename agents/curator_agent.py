@@ -32,9 +32,10 @@ class CuratorAgent:
                 refined = response.text.strip().replace('"', '')
                 if refined:
                     return refined
-            except:
+            except Exception as e:
+                print(f"⚠️ {model_name} 제목 다듬기 실패: {e}", flush=True)
                 continue
-        
+
         return raw_topic
 
     def analyze_trends(self, raw_search_results):

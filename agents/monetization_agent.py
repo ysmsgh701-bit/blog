@@ -24,7 +24,8 @@ class MonetizationAgent:
             model = genai.GenerativeModel('gemini-1.5-flash')
             response = model.generate_content(prompt)
             return [k.strip() for k in response.text.split(',')]
-        except:
+        except Exception as e:
+            print(f"⚠️ 상품 추천 실패: {e}", flush=True)
             return ["부모님 선물", "건강식품", "자기계발도서"]
 
     def insert_coupang_links(self, html_content, topic):
@@ -38,8 +39,10 @@ class MonetizationAgent:
         """
         
         for kw in keywords:
-            # 실제 API 연동 전까지는 검색 링크 형식으로 생성
-            search_url = f"https://link.coupang.com/a/your-link-id?q={kw}" 
+            # 쿠팡 파트너스 검색 URL (COUPANG_ID를 .env에 실제 파트너스 ID로 설정)
+            import urllib.parse
+            encoded_kw = urllib.parse.quote(kw)
+            search_url = f"https://www.coupang.com/np/search?q={encoded_kw}&ref={self.coupang_id}"
             monetization_html += f"""
                 <li style="margin-bottom: 10px;">
                     <a href="{search_url}" target="_blank" style="color: #007bff; text-decoration: none;">

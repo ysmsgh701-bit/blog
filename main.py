@@ -48,6 +48,31 @@ def update_db(post_data):
     with open(POSTS_DB, "w", encoding="utf-8") as f:
         json.dump(posts, f, ensure_ascii=False, indent=4)
 
+def validate_config():
+    """필수 환경변수 및 파일 존재 여부 사전 검사"""
+    errors = []
+    warnings = []
+
+    if not os.getenv("GEMINI_API_KEY"):
+        errors.append("GEMINI_API_KEY 미설정 (필수)")
+    if not os.getenv("BLOGGER_BLOG_ID"):
+        warnings.append("BLOGGER_BLOG_ID 미설정 → Blogger 발행 건너뜀")
+    if not os.getenv("OPENAI_API_KEY"):
+        warnings.append("OPENAI_API_KEY 미설정 → 이미지 생성 Mock 모드로 실행됨")
+    if os.getenv("COUPANG_ID", "AF1234567") == "AF1234567":
+        warnings.append("COUPANG_ID가 기본값 → .env에 실제 파트너스 ID 설정 권장")
+
+    for w in warnings:
+        print(f"⚠️  [CONFIG] {w}", flush=True)
+    for e in errors:
+        print(f"❌  [CONFIG] {e}", flush=True)
+
+    if errors:
+        print("설정 오류로 인해 파이프라인을 시작할 수 없습니다.", flush=True)
+        return False
+    return True
+
+
 def run_automation_pipeline(custom_keyword=None):
     print(f"\n🚀 [START] 4060 Smart Blog Pipeline 가동 ---", flush=True)
     
@@ -79,11 +104,11 @@ def run_automation_pipeline(custom_keyword=None):
         print(f"✅ 원고 작성 완료 ({len(raw_content)}자)", flush=True)
 
     # 3. HTML 변환 (HTMLBuilder)
-    print("\n[3/6] 프리미엄 HTML 변환 중...", flush=True)
+    print("\n[3/7] 프리미엄 HTML 변환 중...", flush=True)
     final_post_html = HTMLBuilder.build_premium_post(target_topic['topic'], raw_content)
 
     # 4. 수익화 코드 삽입 (MonetizationAgent)
-    print("\n[4/6] 수익화 링크(쿠팡 파트너스) 삽입 중...", flush=True)
+    print("\n[4/7] 수익화 링크(쿠팡 파트너스) 삽입 중...", flush=True)
     time.sleep(5)
     monetizer = MonetizationAgent()
     final_post_html = monetizer.insert_coupang_links(final_post_html, target_topic['topic'])
@@ -101,7 +126,7 @@ def run_automation_pipeline(custom_keyword=None):
     }
     
     # HTML 파일 저장
-    with open(DATA_DIR / f"post_{post_id}.html", "w", encoding="utf-8") as f:
+    with open(POSTS_DIR / f"post_{post_id}.html", "w", encoding="utf-8") as f:
         f.write(final_post_html)
     
     print(f"✅ 로컬 데이터 저장 완료 (ID: {post_id})", flush=True)
@@ -132,7 +157,7 @@ def run_automation_pipeline(custom_keyword=None):
         if sns_content_raw and sns_content_raw != "{}":
             sns_content = json.loads(sns_content_raw, strict=False)
             sns_filename = f"sns_{post_id}.json"
-            with open(DATA_DIR / sns_filename, "w", encoding="utf-8") as f:
+            with open(SNS_DIR / sns_filename, "w", encoding="utf-8") as f:
                 json.dump(sns_content, f, ensure_ascii=False, indent=4)
             print("✅ SNS 데이터 생성 완료", flush=True)
             
@@ -148,5 +173,7 @@ def run_automation_pipeline(custom_keyword=None):
     print(f"\n✨ [FINISH] 모든 작업 완료! 대시보드(index.html)에서 확인하세요. ---", flush=True)
 
 if __name__ == "__main__":
+    if not validate_config():
+        sys.exit(1)
     topic = sys.argv[1] if len(sys.argv) > 1 else None
     run_automation_pipeline(custom_keyword=topic)

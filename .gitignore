@@ -1,15 +1,27 @@
-# Privacy
+# 환경변수 및 인증 정보 (절대 커밋 금지)
 .env
+.env.local
 token.json
 client_secrets.json
 config/credentials.json
+*.pickle
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
 
-# Virtual Environment
+# 가상환경
 venv/
 .venv/
+env/
 
-# Data (Sensitive content can be excluded if needed, 
-# but for GitHub Pages dashboard to work, JSON/HTML should be tracked)
-# data/images/ # 이미지 파일이 많을 경우 제외 추천
+# 생성 데이터 (용량 절약)
+data/images/
+data/posts/
+
+# IDE
+.vscode/
+.idea/

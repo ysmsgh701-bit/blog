@@ -1,4 +1,5 @@
 import os
+import re
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -13,7 +14,8 @@ class DistributorAgent:
     def _list_available_models(self):
         try:
             return [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        except:
+        except Exception as e:
+            print(f"⚠️ 모델 목록 조회 실패: {e}", flush=True)
             return ["models/gemini-1.5-flash"]
 
     def transform_for_sns(self, blog_title, blog_content):
@@ -64,7 +66,6 @@ class DistributorAgent:
                 content = response.text.strip()
                 
                 # 정규표현식으로 JSON 블록 추출 시도
-                import re
                 json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
                 if json_match:
                     return json_match.group(1)
