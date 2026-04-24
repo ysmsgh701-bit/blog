@@ -41,6 +41,7 @@ class PublisherAgent:
             service = self._get_blogger_service()
             if not service: return None
             
+            print(f"📡 Blogger로 데이터 전송 중... (제목: {title[:20]}..., 본문 길이: {len(content)}자)")
             body = {
                 "kind": "blogger#post",
                 "title": title,

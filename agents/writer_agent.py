@@ -18,40 +18,47 @@ class WriterAgent:
         except:
             return ["models/gemini-pro"]
 
-    def generate_post(self, topic):
+    def generate_post(self, topic, keywords=[]):
+        """블로그 원고 생성 (주제와 키워드 기반)"""
         prompt = f"""
-        당신은 4060 세대를 타겟으로 하는 전문 블로그 작가입니다.
-        주제: '{topic['keyword']}'에 대해 HTML 형식으로 전문적인 블로그 글을 작성하세요.
-        본문 중간에 [AD_BUTTON]을 꼭 넣어주세요.
+        당신은 대한민국 4060 세대를 타겟으로 하는 전문 블로그 작가입니다.
+        아래 주제와 키워드를 바탕으로, 독자들에게 실질적인 도움이 되고 가독성이 뛰어난 블로그 원고를 작성해주세요.
+        
+        주제: {topic}
+        키워드: {', '.join(keywords)}
+        
+        [지침]
+        1. 4060 세대의 눈높이에 맞춰 쉽고 친절하게 설명하세요.
+        2. 소제목을 3개 이상 활용하여 구조를 잡으세요.
+        3. 본문 중간에 [AD_BUTTON] 이라는 텍스트를 반드시 2회 삽입하세요.
+        4. 분량은 1,500자 내외로 상세하게 작성하세요.
         """
         
-        # 시도할 우선 순위 모델들 (최신 프리뷰보다는 안정적인 모델 우선)
-        priority_keywords = ['1.5-flash', '1.5-pro', '1.0-pro', 'gemini-pro']
-        
-        # 우선 순위에 따라 시도할 모델 리스트 재구성
-        try_list = []
-        for kw in priority_keywords:
-            for m in self.available_models:
-                if kw in m and m not in try_list:
-                    try_list.append(m)
-        
-        # 목록에 없는 나머지 모델들도 뒤에 추가
-        for m in self.available_models:
-            if m not in try_list:
-                try_list.append(m)
-
-        for model_name in try_list:
-            try:
-                print(f"--- [TRY] {model_name} 모델로 시도 중... ---")
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(prompt)
-                return response.text
-            except Exception as e:
-                print(f"⚠️ {model_name} 실패: {str(e)}")
-                time.sleep(1) # 잠시 대기 후 다음 모델 시도
-                continue
-        
-        return "모든 모델에서 글쓰기에 실패했습니다. 구글 서버 상태를 확인해 주세요."
+        # 시도할 우선 순위 모델들 (2026년 기준 가용 모델)
+        try_models = ['models/gemini-2.0-flash', 'models/gemini-flash-latest', 'models/gemini-pro-latest']
+        for model_name in try_models:
+            for attempt in range(3): # 모델당 최대 3번 시도
+                try:
+                    print(f"📡 {model_name} 모델로 원고 생성 시도 중... (시도 {attempt+1}/3)", flush=True)
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+                    if response and response.text:
+                        return response.text
+                except Exception as e:
+                    error_msg = str(e)
+                    if "429" in error_msg:
+                        wait_time = 40 # 기본 40초 대기 (쿼터 초과 대비)
+                        print(f"⚠️ 쿼터 초과 (429). {wait_time}초 후 다시 시도합니다...", flush=True)
+                        time.sleep(wait_time)
+                        continue # 같은 모델로 다시 시도
+                    else:
+                        print(f"⚠️ {model_name} 실패: {e}", flush=True)
+                        break # 다음 모델로 넘어감
+                
+        return None
+                
+        return None
 
 if __name__ == "__main__":
     agent = WriterAgent()
+    print("Available models:", agent.available_models)

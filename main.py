@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
@@ -10,6 +11,7 @@ from agents.writer_agent import WriterAgent
 from agents.publisher_agent import PublisherAgent
 from agents.distributor_agent import DistributorAgent
 from agents.image_agent import ImageAgent
+from agents.monetization_agent import MonetizationAgent
 from utils.html_builder import HTMLBuilder
 
 # .env 파일 로드
@@ -47,31 +49,48 @@ def update_db(post_data):
         json.dump(posts, f, ensure_ascii=False, indent=4)
 
 def run_automation_pipeline(custom_keyword=None):
-    print("\n🚀 [START] 4060 Smart Blog Pipeline 가동 ---")
+    print(f"\n🚀 [START] 4060 Smart Blog Pipeline 가동 ---", flush=True)
     
     # 1. 주제 기획 (Curator)
+    print("\n[1/7] 주제 분석 및 기획 중...", flush=True)
     curator = CuratorAgent()
     if custom_keyword:
-        target_topic = {"topic": custom_keyword, "keywords": [custom_keyword], "category": "사용자 지정"}
+        catchy_title = curator.refine_title(custom_keyword)
+        print(f"🎯 제목 다듬기: {custom_keyword} -> {catchy_title}", flush=True)
+        target_topic = {"topic": catchy_title, "keywords": [custom_keyword], "category": "사용자 지정"}
     else:
-        print("[1/5] 트렌드 분석 및 주제 선정 중...")
+        print("[1/7] 트렌드 분석 및 주제 선정 중...", flush=True)
         trends = curator.analyze_trends("2025 복지 혜택, 노인 일자리, 절세 전략, 건강보험")
         topics = json.loads(trends)
         target_topic = topics[0] if topics else {"topic": "추천 주제 없음", "keywords": []}
     
-    print(f">> 선정 주제: {target_topic['topic']}")
+    print(f">> 선정 주제: {target_topic['topic']}", flush=True)
 
     # 2. 원고 작성 (Writer)
-    print("[2/5] AI 원고 생성 중...")
+    print("\n[2/7] 원고 작성 중...", flush=True)
+    time.sleep(10) # 쿼터 방지를 위한 대기
     writer = WriterAgent()
-    raw_content = writer.generate_post({"keyword": target_topic['topic']})
+    raw_content = writer.generate_post(target_topic['topic'], target_topic.get('keywords', []))
     
-    # 3. HTML 디자인 (Utils)
-    final_post_html = HTMLBuilder.build_premium_post(raw_content)
-    print("[3/5] 프리미엄 HTML 변환 완료")
+    if not raw_content or len(raw_content) < 100:
+        print("❌ [ERROR] 원고 작성 실패 (내용이 너무 짧거나 비어있습니다. API 할당량을 확인하세요.)", flush=True)
+        return
+    else:
+        print(f"✅ 원고 작성 완료 ({len(raw_content)}자)", flush=True)
 
-    # 4. 데이터 저장 및 DB 업데이트
-    post_id = int(datetime.now().timestamp())
+    # 3. HTML 변환 (HTMLBuilder)
+    print("\n[3/6] 프리미엄 HTML 변환 중...", flush=True)
+    final_post_html = HTMLBuilder.build_premium_post(target_topic['topic'], raw_content)
+
+    # 4. 수익화 코드 삽입 (MonetizationAgent)
+    print("\n[4/6] 수익화 링크(쿠팡 파트너스) 삽입 중...", flush=True)
+    time.sleep(5)
+    monetizer = MonetizationAgent()
+    final_post_html = monetizer.insert_coupang_links(final_post_html, target_topic['topic'])
+
+    # 5. 데이터 저장 및 DB 업데이트 (기존 4단계를 5단계로 변경)
+    time.sleep(2)
+    post_id = int(time.time())
     post_entry = {
         "id": post_id,
         "date": datetime.now().strftime("%Y-%m-%d"),
@@ -80,45 +99,53 @@ def run_automation_pipeline(custom_keyword=None):
         "category": target_topic.get('category', '일반'),
         "status": "draft"
     }
-    update_db(post_entry)
     
     # HTML 파일 저장
-    html_path = POSTS_DIR / f"post_{post_id}.html"
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(final_post_html)
-    
-    # 대시보드 호환을 위해 루트 data 폴더에도 복사본 유지 (필요시)
     with open(DATA_DIR / f"post_{post_id}.html", "w", encoding="utf-8") as f:
         f.write(final_post_html)
+    
+    print(f"✅ 로컬 데이터 저장 완료 (ID: {post_id})", flush=True)
 
-    print(f"[4/5] 로컬 데이터베이스 및 HTML 저장 완료 (ID: {post_id})")
+    # 6. 블로그 실제 발행 (Publisher)
+    print("\n[6/7] 구글 블로그(Blogger) 자동 발행 시도 중...", flush=True)
+    blog_id = os.getenv("BLOGGER_BLOG_ID")
+    if blog_id:
+        publisher = PublisherAgent()
+        pub_result = publisher.publish_to_blogger(blog_id, target_topic['topic'], final_post_html)
+        if pub_result:
+            print(f"🚀 [SUCCESS] 구글 블로그 발행 완료! (URL: {pub_result.get('url')})", flush=True)
+            post_entry["status"] = "published"
+            post_entry["url"] = pub_result.get("url")
+        else:
+            print("❌ [FAIL] 구글 블로그 발행 실패 (로그를 확인하세요.)", flush=True)
+    else:
+        print("⚠️ [SKIP] BLOGGER_BLOG_ID 미설정으로 발행 건너뜀", flush=True)
 
-    # 5. SNS 변환 및 이미지 생성 (Distributor & ImageAgent)
-    print("\n[5/5] SNS 홍보 콘텐츠 및 이미지 생성 중...")
+    update_db(post_entry)
+
+    # 7. SNS 변환 및 이미지 생성
+    print("\n[7/7] SNS 콘텐츠 및 이미지 생성 중...", flush=True)
     distributor = DistributorAgent()
     sns_content_raw = distributor.transform_for_sns(target_topic['topic'], raw_content)
     
     try:
-        sns_content = json.loads(sns_content_raw)
-        # SNS 데이터 저장
-        sns_path = SNS_DIR / f"sns_{post_id}.json"
-        with open(sns_path, "w", encoding="utf-8") as f:
-            json.dump(sns_content, f, ensure_ascii=False, indent=4)
-        
-        # 루트 data 폴더 복사본
-        with open(DATA_DIR / f"sns_{post_id}.json", "w", encoding="utf-8") as f:
-            json.dump(sns_content, f, ensure_ascii=False, indent=4)
-
-        # 이미지 생성
-        image_agent = ImageAgent()
-        image_files = image_agent.generate_images(post_id, sns_content.get('carousel', []))
-        if image_files:
-            print(f"✅ {len(image_files)}개의 카드뉴스 이미지 생성 완료")
+        if sns_content_raw and sns_content_raw != "{}":
+            sns_content = json.loads(sns_content_raw, strict=False)
+            sns_filename = f"sns_{post_id}.json"
+            with open(DATA_DIR / sns_filename, "w", encoding="utf-8") as f:
+                json.dump(sns_content, f, ensure_ascii=False, indent=4)
+            print("✅ SNS 데이터 생성 완료", flush=True)
             
+            image_agent = ImageAgent()
+            image_files = image_agent.generate_images(post_id, sns_content.get('carousel', []))
+            if image_files:
+                print(f"✅ 카드뉴스 이미지 {len(image_files)}개 생성 완료", flush=True)
+        else:
+            print("❌ [FAIL] SNS 콘텐츠 생성 실패 (API 할당량 부족)", flush=True)
     except Exception as e:
-        print(f"⚠️ SNS/이미지 생성 중 오류 발생: {e}")
+        print(f"❌ [ERROR] SNS 처리 중 오류: {e}", flush=True)
     
-    print(f"\n✨ [FINISH] 모든 작업 완료! 대시보드(index.html)에서 확인하세요. ---")
+    print(f"\n✨ [FINISH] 모든 작업 완료! 대시보드(index.html)에서 확인하세요. ---", flush=True)
 
 if __name__ == "__main__":
     topic = sys.argv[1] if len(sys.argv) > 1 else None
